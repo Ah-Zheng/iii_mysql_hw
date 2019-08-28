@@ -14,8 +14,8 @@ use iii;
 drop table if exists `customers`;
 create table `customers` (
     customerId int(3) zerofill auto_increment,
-    customerName varchar(20),
-    customerPhone varchar(10),
+    customerName varchar(20) not null,
+    customerPhone varchar(10) not null,
     customerEmail varchar(100),
     customerAddress varchar(100),
     primary key (customerId)
@@ -25,24 +25,43 @@ create table `customers` (
 drop table if exists `suppliers`;
 create table `suppliers` (
     supplierId int auto_increment,
-    supplierName varchar(50),
+    supplierNumber varchar(10) not null,
+    supplierName varchar(50) not null,
     supplierPhone varchar(10) not null,
     supplierAddress varchar(100),
     primary key (supplierId),
-    unique key (supplierPhone)
+    unique key (supplierNumber)
 ) character set utf8 collate utf8_unicode_ci;
+
+-- 建立已刪除供應商
+-- drop table if exist `delSuppliers`;
+-- create table `delSupplers` (
+
+-- ) character set utf8 collate utf8_unicode_ci
 
 -- 建立商品列表(products)
 drop table if exists `products`;
 create table `products` (
     productid int auto_increment,
     productNumber varchar(10) not null,
-    productName varchar(50),
-    productPrice int,
-    supplierPhone varchar(10) not null,
+    productName varchar(50) not null,
+    productPrice int not null,
+    supplierNumber varchar(10) not null,
     primary key (productid),
-    foreign key (supplierPhone) references suppliers(supplierPhone) on update cascade,
+    foreign key (supplierNumber) references suppliers(supplierNumber),
     unique key (productNumber)
+) character set utf8 collate utf8_unicode_ci;
+
+-- 建立已刪除商品列表(delProducts)
+drop table if exists `delProducts`;
+create table `delProducts` (
+    delProductId int auto_increment,
+    delProductNumber varchar(10) not null,
+    delProductName varchar(50) not null,
+    delProductPrice int,
+    supplierNumber varchar(10) not null,
+    productStatus varchar(10) default '已刪除',
+    primary key (delProductId)
 ) character set utf8 collate utf8_unicode_ci;
 
 -- 建立訂單明細(orderDetails)
@@ -51,8 +70,8 @@ create table `orderDetails` (
     orderDetailsId int auto_increment,
     orderNumber varchar(10) not null,
     productNumber varchar(10) not null,
-    productPrice int,
-    quantity int,
+    productPrice int not null,
+    quantity int not null,
     primary key (orderDetailsId),
     -- foreign key (productNumber) references products(productNumber),
     index (orderNumber)
@@ -63,11 +82,21 @@ drop table if exists `orders`;
 create table `orders` (
     orderId int auto_increment,
     orderNumber varchar(10) not null,
-    customerId int(3) zerofill,
+    customerId int(3) zerofill not null,
     primary key (orderId),
     -- foreign key (orderNumber) references orderDetails(orderNumber),
     foreign key (customerId) references customers(customerId)
 ) character set utf8 collate utf8_unicode_ci;
+
+-- 會員登入(users)
+-- drop table if exists `users`;
+-- create table `users` (
+--     userId int auto_increment,
+--     userSex varchar(10);
+--     userAccount varchar(30),
+--     userPassword varchar(30),
+--     userEmail varchar(50),
+-- )
 
 
 --------------------------------- 客戶 ---------------------------------
@@ -143,18 +172,19 @@ end #
 
 -- 新增 -- call addSupplier('名稱', '電話', '地址');
 create procedure addSupplier(
+    in sNum varchar(10),
     in sname varchar(50),
     in sphone varchar(10),
     in saddress varchar(100) 
 )
 begin
-    insert into `suppliers` (`supplierName`, `supplierPhone`, `supplierAddress`)
-    values (sname, sphone, saddress);    
+    insert into `suppliers` (`supplierNumber`, `supplierName`, `supplierPhone`, `supplierAddress`)
+    values (sNum, sname, sphone, saddress);    
 end #
 
 -- 修改 --
 create procedure updateSupplier(
-    in supid int,
+    in sNum int,
     in sname varchar(50),
     in sphone varchar(10),
     in saddress varchar(100)
@@ -162,27 +192,27 @@ create procedure updateSupplier(
 begin
     if sname = '' then
         select `supplierName` into @v_sname from `suppliers`
-        where `supplierId` = supid;
+        where `supplierNumber` = sNum;
     else set @v_sname = sname; end if;
     if sphone = '' then
         select `supplierPhone` into @v_sphone from `suppliers`
-        where `supplierId` = supid;
+        where `supplierNumber` = sNum;
     else set @v_sphone = sphone ; end if;
     if saddress = '' then
         select `supplierAddress` into @v_saddress from `suppliers`
-        where `supplierId` = supid;
+        where `supplierNumber` = sNum;
     else set @v_saddress = saddress ; end if;
     update `suppliers` set
     `supplierName` = @v_sname,
     `supplierPhone` = @v_sphone,
     `supplierAddress` = @v_saddress
-    where `supplierId` = supid;
+    where `supplierNumber` = sNum;
 end #
 
 -- 刪除 -- call deleteSupplier(供應商ID)
-create procedure deleteSupplier(in supid int)
+create procedure deleteSupplier(in sNum int)
 begin
-    delete from `suppliers` where `supplierid` = supid;
+    delete from `suppliers` where `supplierNumber` = sNum;
 end #
 
 -- 查詢 -- call selectSupplier('keyword');
@@ -190,13 +220,26 @@ create procedure selectSupplier(in kw varchar(50))
 begin
     set @v_kw = concat('%', kw, '%');
     select count(*) into @count from `suppliers`
-    where `supplierPhone` like @v_kw or `supplierName` like @v_kw;
+    where `supplierPhone` like @v_kw
+    or `supplierName` like @v_kw 
+    or `supplierNumber` like @v_kw;
     if kw = '' or @count = 0 then
         select * from `suppliers`;
     else 
         select * from `suppliers`
-        where `supplierPhone` like @v_kw or `supplierName` like @v_kw;
+        where `supplierPhone` like @v_kw 
+        or `supplierName` like @v_kw 
+        or `supplierNumber` like @v_kw;
     end if;
+end #
+
+-- 已刪除供應商 --
+create trigger delSupplier after delete on `suppliers` for each row
+begin
+    insert into `delSupplier`
+    ()
+    values
+    ();
 end #
 
 --------------------------------- 商品 ---------------------------------
@@ -206,11 +249,11 @@ create procedure addProduct(
     in pname varchar(50),
     in pNum varchar(10),
     in pprice int,
-    in sphone varchar(100)
+    in sNum varchar(10)
 )
 begin
-    insert into `products` (`productName`, `productNumber`, `productPrice`, `supplierPhone`)
-    values (pname, pNum, pprice, sphone);
+    insert into `products` (`productName`, `productNumber`, `productPrice`, `supplierNumber`)
+    values (pname, pNum, pprice, sNum);
 end #
 
 -- 修改 --
@@ -233,9 +276,9 @@ begin
 end #
 
 -- 刪除 --
-create trigger deleteProduct before delete on `suppliers` for each row
+create trigger deleteProducts before delete on `suppliers` for each row
 begin
-    delete from `products` where `supplierPhone` = old.supplierPhone;
+    delete from `products` where `supplierNumber` = old.supplierNumber;
 end #
 
 -- deleteProdcut(商品ID);
@@ -259,10 +302,13 @@ begin
 end #
 
 -- 已刪除商品表 --
--- create trigger deletedProduct after delete on `products` for each row
--- begin
---     create table if not exists  
--- end #
+create trigger deletedProduct after delete on `products` for each row
+begin
+    insert into `delProducts` 
+    (`supplierNumber`, `delProductNumber`, `delProductName`, `delProductPrice`)
+    values
+    (old.`supplierNumber`, old.`productNumber`, old.`productName`, old.`ProductPrice`);
+end #
 
 
 --------------------------------- 訂單 ---------------------------------
@@ -328,7 +374,7 @@ begin
     and `productNumber` = pNum;
 end #
 
--- 刪除 --
+-- 刪除 -- call deleteOrderDetails('訂單編號', '商品編號');
 create procedure deleteOrderDetails(
     in oNum varchar(10),
     in pNum varchar(10)
@@ -440,25 +486,25 @@ call addCustomer('howard', '0912345673', 'howard@gmail.com', '台中市大里區
 call addCustomer('wade', '0912343673', 'wade@gmail.com', '台中市霧峰區');
 call addCustomer('kobe', '0912343673', 'kobe@gmail.com', '台中市太平區');
 
-call addSupplier('阿正萬事屋', '0988270468', '台中市太平區');
-call addSupplier('阿銀沒事屋', '0922345678', '台中市霧峰區');
-call addSupplier('阿璇有事屋', '0932344678', '台中市大里區');
+call addSupplier('S001', '阿正萬事屋', '0988270468', '台中市太平區');
+call addSupplier('S002', '阿銀沒事屋', '0922345678', '台中市霧峰區');
+call addSupplier('S003', '阿璇有事屋', '0932344678', '台中市大里區');
 
-call addProduct('電腦', 'Z001', 15000, '0988270468');
-call addProduct('鍵盤', 'Z002', 800, '0988270468');
-call addProduct('滑鼠', 'Z003', 500, '0988270468');
-call addProduct('網路線', 'Y001', 250, '0922345678');
-call addProduct('WIFI分享器', 'Y002', 1000, '0922345678');
-call addProduct('switch', 'Y003', 2000, '0922345678');
-call addProduct('OPPO充電線', 'S001', 499, '0932344678');
-call addProduct('OPPO充電頭', 'S002', 599, '0932344678');
-call addProduct('OPPO耳機線', 'S003', 699, '0932344678');
+call addProduct('電腦', 'Z001', 15000, 'S001');
+call addProduct('鍵盤', 'Z002', 800, 'S001');
+call addProduct('滑鼠', 'Z003', 500, 'S001');
+call addProduct('網路線', 'Y001', 250, 'S002');
+call addProduct('WIFI分享器', 'Y002', 1000, 'S002');
+call addProduct('switch', 'Y003', 2000, 'S002');
+call addProduct('OPPO充電線', 'C001', 499, 'S003');
+call addProduct('OPPO充電頭', 'C002', 599, 'S003');
+call addProduct('OPPO耳機線', 'C003', 699, 'S003');
 
 call addOrderDetails('P001', 1, 'Z001', 15000, 2);
 call addOrderDetails('P001', 1, 'Y002', 1000, 1);
-call addOrderDetails('P002', 2, 'S001', 499, 3);
-call addOrderDetails('P002', 2, 'S002', 599, 3);
-call addOrderDetails('P003', 3, 'S003', 699, 3);
+call addOrderDetails('P002', 2, 'C001', 499, 3);
+call addOrderDetails('P002', 2, 'C002', 599, 3);
+call addOrderDetails('P003', 3, 'C003', 699, 3);
 call addOrderDetails('P004', 1, 'Z001', 15000, 1);
 call addOrderDetails('P004', 1, 'Z002', 800, 8);
 call addOrderDetails('P004', 1, 'S001', 499, 5);
